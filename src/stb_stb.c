@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
 
     switch (pr.tag) {
     case parse_result_order:
-        library_order_describe(&pr.order);
+        library_order_deliver(&pr.order, stdout);
         // todo: intepret order..
         CLEAN_RETURN(&mem, EX_OK);
     case parse_result_show_help:
@@ -169,15 +169,15 @@ parse_result_t parse_cli(int argc, char **argv, memlst_t **pmem) {
         case OPT_VERSION: return (parse_result_t) { .tag = parse_result_show_version };
 
         case OPT_AUTHOR: order.author = input_field_string(optarg); break;
-        case OPT_FAUTHOR: order.author = input_field_pathname(optarg); break;
+        case OPT_FAUTHOR: order.author = input_field_filename(optarg); break;
         case OPT_BRIEF: order.brief = input_field_string(optarg); break;
-        case OPT_FBRIEF: order.brief = input_field_pathname(optarg); break;
+        case OPT_FBRIEF: order.brief = input_field_filename(optarg); break;
         case OPT_COPYRIGHT: order.copyright = input_field_string(optarg); break;
-        case OPT_FCOPYRIGHT: order.copyright = input_field_pathname(optarg); break;
+        case OPT_FCOPYRIGHT: order.copyright = input_field_filename(optarg); break;
         case OPT_DETAILS: order.details = input_field_string(optarg); break;
-        case OPT_FDETAILS: order.details = input_field_pathname(optarg); break;
+        case OPT_FDETAILS: order.details = input_field_filename(optarg); break;
         case OPT_MYVERSION: order.version = input_field_string(optarg); break;
-        case OPT_FMYVERSION: order.version = input_field_pathname(optarg); break;
+        case OPT_FMYVERSION: order.version = input_field_filename(optarg); break;
 
         case OPT_OUTPUT: order.output = optarg; break;
         case OPT_DEPENDENCY:

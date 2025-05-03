@@ -8,6 +8,7 @@
   AllowShortCaseLabelsOnASingleLine: true
   AllowShortEnumsOnASingleLine: true
   AllowShortIfStatementsOnASingleLine: WithoutElse
+  AllowShortLoopsOnASingleLine: true
   BreakBeforeBinaryOperators: All
   BreakBeforeBraces: Attach
   ColumnLimit: 0
