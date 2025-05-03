@@ -2,6 +2,7 @@
 
 typedef struct {
     enum {
+        input_field_null,
         input_field_string,
         input_field_pathname,
     } tag;

@@ -1,24 +1,9 @@
 #pragma once
 
-#include "input_field.h"
-#include <stdbool.h>
-
 #define unreachable() __builtin_unreachable()
-
-typedef struct {
-    input_field_t author, brief, copyright, details, version;
-    char const *library;
-    char const *output;
-    char const **dependencies;
-    char const **source_files;
-    bool overwrite, check;
-} stb_library_order_t;
 
 /// @brief The program's name
 #define PROG "stb_stb"
-
-/// @brief The program's versionstring
-#define VERSION "0.1.0"
 
 /// @brief The program's usagestring.
 #define USAGE "Usage:\n\

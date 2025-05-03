@@ -1,6 +1,7 @@
 #include "stb_stb.h"
 #include "lib/memlst.h"
 #include "lib/stb_ds.h"
+#include "library_order.h"
 
 #include <getopt.h>
 #include <stdbool.h>
@@ -21,7 +22,7 @@ typedef struct {
         parse_result_show_version,
     } tag;
     union {
-        stb_library_order_t order;
+        library_order_t order;
         parse_error_t error;
     };
 } parse_result_t;
@@ -31,9 +32,10 @@ static inline parse_result_t parse_cli(int argc, char **argv, memlst_t **pmem);
 int main(int argc, char **argv) {
     memlst_t *mem = memlst_init();
     parse_result_t pr = parse_cli(argc, argv, &mem);
-    
+
     switch (pr.tag) {
     case parse_result_order:
+        library_order_describe(&pr.order);
         // todo: intepret order..
         CLEAN_RETURN(&mem, EX_OK);
     case parse_result_show_help:
@@ -149,14 +151,14 @@ parse_result_t parse_cli(int argc, char **argv, memlst_t **pmem) {
             .val = OPT_OVERWRITE,
         },
         {
-            .name = "no_check",
+            .name = "no-check",
             .val = OPT_NO_CHECK,
         },
 
-        {},
+        { 0 },
     };
 
-    stb_library_order_t order = {
+    library_order_t order = {
         .check = true,
     };
 
