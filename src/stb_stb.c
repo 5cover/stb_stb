@@ -27,14 +27,17 @@ typedef struct {
     };
 } parse_result_t;
 
-static inline parse_result_t parse_cli(int argc, char **argv, memlst_t **pmem);
+static void free_order(void *ptr);
+
+static inline parse_result_t parse_cli(int argc, char **argv);
 
 int main(int argc, char **argv) {
     memlst_t *mem = memlst_init();
-    parse_result_t pr = parse_cli(argc, argv, &mem);
+    parse_result_t pr = parse_cli(argc, argv);
 
     switch (pr.tag) {
     case parse_result_order:
+        memlst_add(&mem, free_order, &pr.order);
         library_order_deliver(&pr.order, stdout);
         // todo: intepret order..
         CLEAN_RETURN(&mem, EX_OK);
@@ -50,7 +53,7 @@ int main(int argc, char **argv) {
     }
 }
 
-parse_result_t parse_cli(int argc, char **argv, memlst_t **pmem) {
+parse_result_t parse_cli(int argc, char **argv) {
     enum {
         // Common options
         OPT_HELP,
@@ -181,7 +184,6 @@ parse_result_t parse_cli(int argc, char **argv, memlst_t **pmem) {
 
         case OPT_OUTPUT: order.output = optarg; break;
         case OPT_DEPENDENCY:
-            if (!order.dependencies) memlst_add(pmem, stbds_arrfreef, order.dependencies);
             arrput(order.dependencies, optarg);
             break;
         case OPT_OVERWRITE: order.overwrite = true; break;
@@ -203,10 +205,15 @@ parse_result_t parse_cli(int argc, char **argv, memlst_t **pmem) {
         fputs(PROG ": error: expected at least two positional arguments, LIBRARY and at least one source file\n", stderr);
         return (parse_result_t) { .tag = parse_result_error, .error = parse_error_usage };
     }
-    memlst_add(pmem, stbds_arrfreef, order.source_files);
     do {
         arrput(order.source_files, argv[optind++]);
     } while (optind < argc);
 
     return (parse_result_t) { .tag = parse_result_order, .order = order };
+}
+
+void free_order(void *ptr)
+{
+    arrfree(((library_order_t*)ptr)->dependencies);
+    arrfree(((library_order_t*)ptr)->source_files);
 }

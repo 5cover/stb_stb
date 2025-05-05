@@ -13,6 +13,14 @@ typedef struct {
     bool overwrite, check;
 } library_order_t;
 
+typedef enum {
+    src_type_others,
+    src_type_source,
+    src_type_header,
+} src_type_t;
+
+src_type_t src_type_detect(char const *filename);
+
 int library_order_deliver(library_order_t const *p_order, FILE *out);
 
 void library_order_describe(library_order_t const *p_order);
