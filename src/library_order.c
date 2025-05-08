@@ -1,4 +1,4 @@
-#include "library_order.h"
+#include "lib/library_order.h"
 #include "lib/stb_ds.h"
 
 #include <ctype.h>
@@ -28,7 +28,7 @@ static inline char *fgets_until_next_line(char *restrict s, int n, FILE *stream)
     return s;
 }
 
-static inline int embed_file(FILE *out, const char *filename) {
+static inline int embed_file(FILE *out, char const *filename) {
     FILE *in = fopen(filename, "r");
     if (!in) {
         fputlnf(stderr, "error: cannot open %s: %s", filename, strerror(errno));
@@ -38,9 +38,8 @@ static inline int embed_file(FILE *out, const char *filename) {
     char line[BUFSIZ];
     while (fgets(line, sizeof line, in)) {
         // todo: remove includes if file is in source files and not in dependencies
-        fputs(line, out);
+        fputs(line, out); 
     }
-
     fclose(in);
 
     putc('\n', out);
@@ -48,7 +47,7 @@ static inline int embed_file(FILE *out, const char *filename) {
     return EX_OK;
 }
 
-static inline int emit_file(emit_mode_t const emit, FILE *out, const char *filename) {
+static inline int emit_file(emit_mode_t const emit, FILE *out, char const *filename) {
     FILE *in = fopen(filename, "r");
     if (!in) {
         fputlnf(stderr, "error: cannot open %s: %s", filename, strerror(errno));
@@ -74,7 +73,7 @@ static inline int emit_file(emit_mode_t const emit, FILE *out, const char *filen
     return EX_OK;
 }
 
-static inline void emit_string(emit_mode_t const emit, FILE *out, const char *s) {
+static inline void emit_string(emit_mode_t const emit, FILE *out, char const *s) {
     while (*s) {
         switch (emit.tag) {
         case emit_string_constant:

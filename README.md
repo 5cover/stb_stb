@@ -124,3 +124,16 @@ extern "C" {
 
 #endif // STB_{LIBRARY}_IMPLEMENTATION
 ```
+
+## Stripping includes: how
+
+Where can #include (or other directives appear):
+
+- The `#` must come at the start of a logical line (ignoring whitespace characters)
+- whitespace after `#`
+- line continuations may appear anywhere
+- any whitespace may appear between `include` and the path
+
+regex
+
+`/(?<!\\\n)\h*#\h*include\h*""/`

@@ -1,4 +1,4 @@
-#include "library_order.h"
+#include "lib/library_order.h"
 #include <string.h>
 
 src_type_t src_type_detect(char const *filename) {

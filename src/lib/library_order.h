@@ -24,3 +24,4 @@ src_type_t src_type_detect(char const *filename);
 int library_order_deliver(library_order_t const *p_order, FILE *out);
 
 void library_order_describe(library_order_t const *p_order);
+

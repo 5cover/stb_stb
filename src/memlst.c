@@ -1,7 +1,7 @@
 #define MEMLST_IMPL
 
-#include "memlst.h"
-#include "stb_ds.h"
+#include "lib/memlst.h"
+#include "lib/stb_ds.h"
 #include <assert.h>
 #include <stdio.h>
 

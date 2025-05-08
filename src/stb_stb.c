@@ -1,7 +1,7 @@
-#include "stb_stb.h"
+#include "lib/stb_stb.h"
 #include "lib/memlst.h"
 #include "lib/stb_ds.h"
-#include "library_order.h"
+#include "lib/library_order.h"
 
 #include <getopt.h>
 #include <stdbool.h>
