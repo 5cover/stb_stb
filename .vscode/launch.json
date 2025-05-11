@@ -10,10 +10,9 @@
       "name": "Debug",
       "program": "${workspaceFolder}/bin/stb_stb",
       "args": [
-        "lib",
-        "*.c",
-        "--fdetails",
-        "justfile",
+        "stb_stb",
+        "-d",
+        "lib/stb_ds.h"
       ],
       "cwd": "${workspaceFolder}"
     }
