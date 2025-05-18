@@ -8,59 +8,80 @@
 /// @brief Read next character, and run anothe rule.
 #define THEN(LABEL, C) \
     do {               \
-        C++;       \
+        C++;           \
         INCL(LABEL);   \
     } while (0)
 
-slice_t extract_include(char const *const line) {
-    slice_t filename = { .val = line };
+    // todo: should we THEN or INCL?
+
+cnode_t parce_c(char const *const line) {
+    cnode_t cnode;
 
     char const *c = line;
 
 start:
     switch (READ(c)) {
     case '#':
-        if (READ(c) == 'i'
-            && READ(c) == 'n'
+        INCL(directive);
+    default:
+        if (*c && isspace(*c)) INCL(start);
+        return (cnode_t) { 0 };
+    }
+
+directive:
+    switch (READ(c)) {
+    case 'i':
+        if (READ(c) == 'n'
             && READ(c) == 'c'
             && READ(c) == 'l'
             && READ(c) == 'u'
             && READ(c) == 'd'
             && READ(c) == 'e') {
-            THEN(start_path, c);
+            cnode.tag = cnode_include;
+            THEN(include, c);
         }
-        return (slice_t) { 0 };
+        return (cnode_t) { 0 };
+    case 'p':
+        if (READ(c) == 'r' && READ(c) == 'a' && READ(c) == 'g' && READ(c) == 'm' && READ(c) == 'a') {
+            return (cnode_t) { 0 }; // THEN(pragma, c);
+        }
+        return (cnode_t) { 0 };
     default:
-        if (*c && isspace(*c)) goto start;
-        return (slice_t) { 0 };
+        return (cnode_t) { 0 };
     }
 
-start_path:
+include:
     switch (READ(c)) {
-    case '<': THEN(usr, c);
-    case '"': THEN(sys, c);
+    case '<':
+        cnode.include.is_usr = true;
+        cnode.include.file = (slice_t) { .len = 0, .val = c };
+        THEN(include_sys, c);
+    case '"':
+        cnode.include.is_usr = false;
+        cnode.include.file = (slice_t) { .len = 0, .val = c };
+        THEN(include_usr, c);
     default:
-        if (*c && isspace(*c)) goto start_path;
-        return (slice_t) { 0 };
+        if (*c && isspace(*c)) INCL(include);
+        return (cnode_t) { 0 };
     }
 
-usr:
+include_usr:
     switch (READ(c)) {
-    case '"': return filename;
+    case '"': return cnode;
     case '\n':
-    case '\0': return (slice_t) { 0 };
+    case '\0': return (cnode_t) { 0 };
     default:
-        filename.len++;
-        goto usr;
+        cnode.include.file.len++;
+        INCL(include_usr);
     }
 
-sys:
+include_sys:
     switch (READ(c)) {
-    case '>': return filename;
+    case '>': return cnode;
     case '\n':
-    case '\0': return (slice_t) { 0 };
+    case '\0': return (cnode_t) { 0 };
     default:
-        filename.len++;
-        goto sys;
+        cnode.include.file.len++;
+        INCL(include_sys);
     }
 }

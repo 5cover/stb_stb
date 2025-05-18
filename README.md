@@ -62,13 +62,22 @@ replace in template
 4. put source files in order (no dependency check, no include guard removal for now)
 5. test compilation of the resulting file, maybe? (add a --no-check option to disable it -- useful if the user's system doesn't have gcc): what gcc command to use to "test if this file compiles (syntax and semantic errors), but don't actually output a binary"
 
-### fetching code
+### reducing code to a single file
 
 give an "entry" point header file
 
 generate {dependencies}: (markdown list) of "user-included" and \<system-included\> files
 
 skip dependencies section if no dependencies: no empty list
+
+- resolving includes?
+- error on redefinition (multiple definitions of the same name in the same translation unit). no automatic namespacing to avoid "magic"
+
+usual scenario
+
+- one front header: mylib.h
+- included by other headers and source files
+- provided file: header + sources
 
 ## Template
 

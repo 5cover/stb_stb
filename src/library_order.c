@@ -29,6 +29,23 @@ static inline char *fgets_until_next_line(char *restrict s, int n, FILE *stream)
     return s;
 }
 
+static inline bool should_emit_line(cnode_t c, char const *const *forbidden_includes) {
+    switch (c.tag) {
+    case cnode_include: {
+        if (!c.include.is_usr) return false;
+        size_t n = arrlenu(forbidden_includes);
+        bool legal = true;
+        while (n-- && legal) {
+            legal = !strncmp(forbidden_includes[n], c.include.file.val, c.include.file.len);
+        }
+        return legal;
+    }
+    case cnode_pragma_once: return false;
+    case cnode_unknown: return true;
+    default: __builtin_unreachable();
+    }
+}
+
 static inline int embed_file(FILE *out, char const *filename, char const *const *forbidden_includes) {
     FILE *in = fopen(filename, "r");
     if (!in) {
@@ -38,18 +55,7 @@ static inline int embed_file(FILE *out, char const *filename, char const *const 
 
     char line[BUFSIZ];
     while (fgets(line, sizeof line, in)) {
-        slice_t inc = extract_include(line);
-        if (inc.val) {
-            size_t n = arrlenu(forbidden_includes);
-            bool legal = true;
-            while (n-- && legal) {
-                if (!strncmp(forbidden_includes[n], inc.val, inc.len)) legal = false;
-            }
-            if (!legal) break;
-        }
-
-        // todo: remove includes if file is in source files and not in dependencies
-        fputs(line, out);
+        if (should_emit_line(parce_c(line), forbidden_includes)) fputs(line, out);
     }
     fclose(in);
 
@@ -207,7 +213,7 @@ int library_order_deliver(library_order_t const *p_order, FILE *out) {
     // possible optimization: compute and cache src_type here so we don't need to recompute it for every file for source files
     for (size_t i = 0; i < n; ++i) {
         if (src_type_detect(p_order->source_files[i]) == src_type_header) {
-            embed_file(out, p_order->source_files[i], p_order->dependencies);
+            embed_file(out, p_order->source_files[i], p_order->source_files);
         }
     }
 
@@ -223,7 +229,7 @@ int library_order_deliver(library_order_t const *p_order, FILE *out) {
     n = arrlenu(p_order->source_files);
     for (size_t i = 0; i < n; ++i) {
         if (src_type_detect(p_order->source_files[i]) == src_type_source) {
-            embed_file(out, p_order->source_files[i], p_order->dependencies);
+            embed_file(out, p_order->source_files[i], p_order->source_files);
         }
     }
 

@@ -10,9 +10,9 @@
       "name": "Debug",
       "program": "${workspaceFolder}/bin/stb_stb",
       "args": [
-        "stb_stb",
-        "-d",
-        "lib/stb_ds.h"
+        "stb_bc",
+        "test/add.c",
+        "test/stb_bc.h"
       ],
       "cwd": "${workspaceFolder}"
     }
