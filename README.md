@@ -2,6 +2,21 @@
 
 Packages a project as an STB-style header only libary.
 
+## Idea for reimplementation
+
+- for each input file : read, discover include trees (maybe they can be parsed unambiguously as preprocessor tokens) until we hit stdlib or forbidden includes
+- collect into two flat arrays in a way that puts parents first: headers and sources
+- determine file type by extension. h : C header. hpp etc. C++ header. c : C source. cpp etc. : C++ source. other : inherit language of the including file
+- emit template with extern "C" and the likes as necessary.
+- test compilation of the resulting file (gcc -fsyntax-only or maybe more to simulate linking)
+- if it fails to compile show the errors to the users (if there are duplicated  functions, static mebers, all sort of stuff  that usually relies on multiple translation units being present -- identify common failure points)
+
+trivia
+
+if we stb_stb a program with a main function, it will add the main function to the implementation section as for any other function
+
+i think it can be  run with `gcc library.h -DLIBRARY_IMPLEMENTATION`
+
 ## Why
 
 - To simplify the development of STB-style libraries
