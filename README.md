@@ -61,6 +61,7 @@ stb_stb LIBRARY SOURCE... [OPTIONS]
 | `--details=STR`, `--fdetails=FILE` | Long description, one `///` line per line of text. |
 | `-v, --myversion=STR`, `-V, --fmyversion=FILE` | Version. Written as a `@version` doc line and as `STB_<LIBRARY>_VERSION`. |
 | `-d, --dependency=NAME` | Declares a quoted include as external. It stays in the output as an `#include`, and the user must provide it. Can be repeated. |
+| `-e, --entry=FILE` | Public header (a `.h` input). Can be repeated. Headers reachable from an entry through quoted includes are declared in the output. The others are visible only to the implementation. See [Entry headers](#entry-headers). |
 | `-o, --output=FILE` | Output file. A directory gets `stb_<LIBRARY>.h` inside it. `-` writes to standard output, which skips the check. |
 | `--overwrite` | Allows replacing an existing output file. |
 | `--no-check` | Skips the syntax check of the generated header. |
@@ -70,6 +71,16 @@ The `--f*` options read the value from a file, and `-` reads standard input. One
 
 The default output is `./stb_<LIBRARY>.h`. If the output path already exists, the tool refuses to write unless `--overwrite` is given. The tool exits with status 0 on success and 1 on any error, including a failed check. On a failed check the header is still written, so you can inspect it.
 
+### Entry headers
+
+An entry header is the front door of the library: the file users include. With `--entry=FILE` (repeatable), the public API is the set of headers reachable from the entries through quoted includes. Only those headers are declared in the output. Every other header is emitted in the implementation section, so the `.c` files still see its declarations, but users of the library do not.
+
+```sh
+stb_stb mylib src/api.h src/internal.h src/api.c src/internal.c --entry=src/api.h
+```
+
+Without `--entry`, every header is public. An entry must be one of the inputs, and it must be a `.h` file. Entries are matched by the file they name, not by the text of the include that refers to them.
+
 ## What the generated header looks like
 
 ```
@@ -77,21 +88,21 @@ doc block: @file, metadata, "Dependencies" list, details
 #ifndef STB_<LIB>_H_INCLUDED / #define ...
 #define STB_<LIB>_VERSION "..."         (only with --myversion)
 extern "C" wrapper, STB_<LIB>_DEFINITION default
-    declarations: every .h input, dependencies first
+    declarations: public headers (all headers without --entry), dependencies first
 #endif
 #ifdef STB_<LIB>_IMPLEMENTATION
-    implementation: every .c input, dependencies first
+    implementation: non-public headers and every .c input, dependencies first
 #endif
 ```
 
-The header section is always present, so everything in your `.h` files is visible to every user of the library. Only the `.c` files sit behind `STB_<LIB>_IMPLEMENTATION`.
+Everything declared in the first section is visible to every user of the library. The `.c` files and the non-public headers sit behind `STB_<LIB>_IMPLEMENTATION`.
 
 ## How the packaging works
 
 1. Each input file is read and scanned for preprocessor directives. Comments, string and character literals, and backslash-newline splices are handled as the C standard describes in translation phases 1 to 3.
 2. A quoted include (`#include "x.h"`) is resolved relative to the directory of the file that contains it. If it names another input file, the file is embedded and the include line is removed. If it names no input file, the tool fails unless the name is declared with `--dependency`.
 3. Input files are ordered so that each file comes after the input files it includes. Ties keep the command-line order.
-4. Headers go into the declaration section and sources into the implementation section, in that order. `#pragma once` lines are removed, because the output is compiled as a main file during the check.
+4. Public headers (see [Entry headers](#entry-headers)) go into the declaration section. Sources and the other headers go into the implementation section. Each section keeps the dependency order. `#pragma once` lines are removed, because the output is compiled as a main file during the check.
 5. The header is written. Unless `--no-check` is given or the output is stdout, it is compiled with `$CC -fsyntax-only -x c -DSTB_<LIB>_IMPLEMENTATION`.
 
 System includes (`#include <...>`) are kept where they are, and every kept include is listed in the `Dependencies` section of the doc block.
@@ -107,6 +118,7 @@ System includes (`#include <...>`) are kept where they are, and every kept inclu
 - Directives written with spaces or tabs between `#` and the keyword, and a directive split across lines with a backslash, or with a comment between the keyword and the name.
 - Comments and string or character literals that contain `#include`. These are not directives.
 - Duplicate input files (each is embedded once).
+- Restricting the declared API with `--entry`, so headers that are not reachable from an entry are visible only to the implementation.
 - Metadata text containing quotes, backslashes or newlines. Quotes and backslashes are escaped in the version macro.
 
 ## Not supported and known limitations
@@ -118,10 +130,10 @@ stb_stb is a packager. It does not preprocess, parse or analyse your code. Read 
 - **No include search paths.** A quoted include is resolved only relative to the including file. Anything else needs `--dependency` and must exist next to the output file, or the check fails.
 - **Only C.** `.cpp`, `.hpp`, `.H` and other extensions are ignored. The check compiles the header as C.
 - **No semantic checks.** Duplicate definitions across files, `static` name clashes, and undeclared identifiers are not detected by the tool. Only the syntax check runs, and only when it is enabled. It is `-fsyntax-only`, so it does not link, and it does not treat warnings as errors.
-- **Headers must be safe in every translation unit.** Declarations, types, macros, `static` functions and `inline` functions are fine. A non-inline function definition or a variable definition in a header is emitted in the declaration section, so including the library from two `.c` files gives duplicate symbols at link time.
+- **Public headers must be safe in every translation unit.** Declarations, types, macros, `static` functions and `inline` functions are fine. A non-inline function definition or a variable definition in a public header is emitted in the declaration section, so including the library from two `.c` files gives duplicate symbols at link time.
 - **All sources share one translation unit.** Macros defined in one source file are visible in every later one, and two `static` functions with the same name in different files clash.
 - **Stb-style headers with their own implementation block cannot be embedded.** A third-party header whose implementation is behind its own `*_IMPLEMENTATION` macro is never compiled, because its macro is defined after its declarations. Keep such headers as `--dependency`, or do not package them.
-- **Not implemented from the original design notes:** entry-point headers (`-e`), overriding the language by extension (`-x`), and C++.
+- **Not implemented from the original design notes:** overriding the language by extension (`-x`), and C++. The design notes also described an error when several headers are given without `--entry`; the tool instead makes every header public, so that case is not an error.
 - **Paths.** On Windows, paths are normalised with `_fullpath`, which does not resolve symbolic links and compares paths case-sensitively. On POSIX, `realpath` is used. The POSIX branch has not been tested.
 - **Whole files are read into memory,** with no size limit.
 - **Metadata text is not processed.** Markdown and doxygen commands are copied as they are. Newlines become separate `///` lines.
@@ -139,7 +151,7 @@ A test named after a limitation (for example `conditional-include`) documents th
 ## Layout
 
 - `src/stb_stb.c`: command-line parsing and `main`.
-- `src/library_order.c`: file loading, ordering, dependency checks, output and the compile check.
+- `src/library_order.c`: file loading, ordering, entry handling, dependency checks, output and the compile check.
 - `src/c.c`, `src/lib/c.h`: the directive scanner.
 - `src/src_type.c`: file-type detection by extension.
 - `src/text.c`, `src/lib/text.h`: whole-file reading.
