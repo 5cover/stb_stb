@@ -17,3 +17,9 @@ stb: build
 
 clean:
     rm -rf bin
+
+# Runs the unit tests (test/unit.c) and the command-line tests (test/cli.sh).
+test: build
+    clang {{flags}} -Isrc test/unit.c src/c.c src/src_type.c -o bin/unit{{exe}}
+    bin/unit{{exe}}
+    sh test/cli.sh {{bin}}
