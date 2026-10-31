@@ -1,15 +1,17 @@
 #pragma once
 
-#include "input_field.h"
+#include "vec.h"
+
 #include <stdbool.h>
-#include <stdio.h>
+
+VEC_DEFINE(str_vec_t, char const *);
 
 typedef struct {
-    input_field_t author, brief, copyright, details, version;
+    char const *author, *brief, *copyright, *details, *version;
     char const *library;
     char const *output;
-    char const **dependencies; ///< stbds array
-    char const **source_files; ///< stbds array
+    str_vec_t dependencies; ///< user-included headers declared external with --dependency
+    str_vec_t source_files;
     bool overwrite, check;
 } library_order_t;
 
@@ -21,7 +23,6 @@ typedef enum {
 
 src_type_t src_type_detect(char const *filename);
 
-int library_order_deliver(library_order_t const *p_order, FILE *out);
-
-void library_order_describe(library_order_t const *p_order);
-
+/// @brief Packages the source files of @p order into a single STB-style header.
+/// @return EXIT_SUCCESS or EXIT_FAILURE.
+int library_order_deliver(library_order_t const *order);

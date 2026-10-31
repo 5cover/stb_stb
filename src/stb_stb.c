@@ -1,219 +1,136 @@
 #include "lib/stb_stb.h"
-#include "lib/memlst.h"
-#include "lib/stb_ds.h"
 #include "lib/library_order.h"
+#include "lib/text.h"
+#include "lib/vec.h"
 
+#include <ctype.h>
 #include <getopt.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sysexits.h>
+#include <string.h>
+
+enum {
+    OPT_HELP = 256,
+    OPT_VERSION,
+    OPT_AUTHOR,
+    OPT_FAUTHOR,
+    OPT_BRIEF,
+    OPT_FBRIEF,
+    OPT_COPYRIGHT,
+    OPT_FCOPYRIGHT,
+    OPT_DETAILS,
+    OPT_FDETAILS,
+    OPT_OVERWRITE,
+    OPT_NO_CHECK,
+};
 
 typedef enum {
-    parse_error_usage,
-    // todo: add more as needed
-} parse_error_t;
+    cli_ok,
+    cli_help,
+    cli_version,
+    cli_error,
+} cli_result_t;
 
-typedef struct {
-    enum {
-        parse_result_order,
-        parse_result_error,
-        parse_result_show_help,
-        parse_result_show_version,
-    } tag;
-    union {
-        library_order_t order;
-        parse_error_t error;
-    };
-} parse_result_t;
-
-static void free_order(void *ptr);
-
-static inline parse_result_t parse_cli(int argc, char **argv);
-
-int main(int argc, char **argv) {
-    memlst_t *mem = memlst_init();
-    parse_result_t pr = parse_cli(argc, argv);
-
-    switch (pr.tag) {
-    case parse_result_order:
-        memlst_add(&mem, free_order, &pr.order);
-        library_order_deliver(&pr.order, stdout);
-        // todo: intepret order..
-        CLEAN_RETURN(&mem, EX_OK);
-    case parse_result_show_help:
-        puts(HELP);
-        CLEAN_RETURN(&mem, EX_OK);
-    case parse_result_show_version:
-        puts(VERSION);
-        CLEAN_RETURN(&mem, EX_OK);
-    case parse_result_error:
-        CLEAN_RETURN(&mem, EX_USAGE);
-    default: unreachable();
+static bool is_identifier(char const *s) {
+    if (!*s || isdigit((unsigned char)*s)) return false;
+    for (; *s; ++s) {
+        if (!isalnum((unsigned char)*s) && *s != '_') return false;
     }
+    return true;
 }
 
-parse_result_t parse_cli(int argc, char **argv) {
-    enum {
-        // Common options
-        OPT_HELP,
-        OPT_VERSION,
+/// Loads a metadata field from a file. A single trailing newline is dropped.
+static bool load_field(char const *path, char const **field) {
+    char *text;
+    size_t len;
+    if (!text_read(path, &text, &len)) return false;
+    if (len && text[len - 1] == '\n') text[--len] = '\0';
+    *field = text;
+    return true;
+}
 
-        // Input field options
-        OPT_AUTHOR,
-        OPT_FAUTHOR,
-        OPT_BRIEF,
-        OPT_FBRIEF,
-        OPT_COPYRIGHT,
-        OPT_FCOPYRIGHT,
-        OPT_DETAILS,
-        OPT_FDETAILS,
-        OPT_FMYVERSION = 'V',
-        OPT_MYVERSION = 'v',
-
-        // Other options
-        OPT_DEPENDENCY = 'd',
-        OPT_OUTPUT = 'o',
-        OPT_OVERWRITE,
-        OPT_NO_CHECK,
-    };
-
-    struct option longopts[] = {
-        {
-            .name = "help",
-            .val = OPT_HELP,
-        },
-        {
-            .name = "version",
-            .val = OPT_VERSION,
-        },
-
-        {
-            .name = "author",
-            .val = OPT_AUTHOR,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "fauthor",
-            .val = OPT_FAUTHOR,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "brief",
-            .val = OPT_BRIEF,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "fbrief",
-            .val = OPT_FBRIEF,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "copyright",
-            .val = OPT_COPYRIGHT,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "fcopyright",
-            .val = OPT_FCOPYRIGHT,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "details",
-            .val = OPT_DETAILS,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "fdetails",
-            .val = OPT_FDETAILS,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "myversion",
-            .val = OPT_VERSION,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "fmyversion",
-            .val = OPT_FMYVERSION,
-            .has_arg = required_argument,
-        },
-
-        {
-            .name = "output",
-            .val = OPT_OUTPUT,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "dependency",
-            .val = OPT_DEPENDENCY,
-            .has_arg = required_argument,
-        },
-        {
-            .name = "overwrite",
-            .val = OPT_OVERWRITE,
-        },
-        {
-            .name = "no-check",
-            .val = OPT_NO_CHECK,
-        },
-
+static cli_result_t parse_cli(int argc, char **argv, library_order_t *order) {
+    struct option const longopts[] = {
+        { .name = "help", .has_arg = no_argument, .val = OPT_HELP },
+        { .name = "version", .has_arg = no_argument, .val = OPT_VERSION },
+        { .name = "author", .has_arg = required_argument, .val = OPT_AUTHOR },
+        { .name = "fauthor", .has_arg = required_argument, .val = OPT_FAUTHOR },
+        { .name = "brief", .has_arg = required_argument, .val = OPT_BRIEF },
+        { .name = "fbrief", .has_arg = required_argument, .val = OPT_FBRIEF },
+        { .name = "copyright", .has_arg = required_argument, .val = OPT_COPYRIGHT },
+        { .name = "fcopyright", .has_arg = required_argument, .val = OPT_FCOPYRIGHT },
+        { .name = "details", .has_arg = required_argument, .val = OPT_DETAILS },
+        { .name = "fdetails", .has_arg = required_argument, .val = OPT_FDETAILS },
+        { .name = "myversion", .has_arg = required_argument, .val = 'v' },
+        { .name = "fmyversion", .has_arg = required_argument, .val = 'V' },
+        { .name = "dependency", .has_arg = required_argument, .val = 'd' },
+        { .name = "output", .has_arg = required_argument, .val = 'o' },
+        { .name = "overwrite", .has_arg = no_argument, .val = OPT_OVERWRITE },
+        { .name = "no-check", .has_arg = no_argument, .val = OPT_NO_CHECK },
         { 0 },
     };
 
-    library_order_t order = {
-        .check = true,
-    };
+    *order = (library_order_t) { .check = true };
 
     int opt;
-    while (-1 != (opt = getopt_long(argc, argv, "V:v:d:o:", longopts, NULL))) {
+    while ((opt = getopt_long(argc, argv, "v:V:d:o:", longopts, NULL)) != -1) {
         switch (opt) {
-        case OPT_HELP: return (parse_result_t) { .tag = parse_result_show_help };
-        case OPT_VERSION: return (parse_result_t) { .tag = parse_result_show_version };
+        case OPT_HELP: return cli_help;
+        case OPT_VERSION: return cli_version;
 
-        case OPT_AUTHOR: order.author = input_field_string(optarg); break;
-        case OPT_FAUTHOR: order.author = input_field_filename(optarg); break;
-        case OPT_BRIEF: order.brief = input_field_string(optarg); break;
-        case OPT_FBRIEF: order.brief = input_field_filename(optarg); break;
-        case OPT_COPYRIGHT: order.copyright = input_field_string(optarg); break;
-        case OPT_FCOPYRIGHT: order.copyright = input_field_filename(optarg); break;
-        case OPT_DETAILS: order.details = input_field_string(optarg); break;
-        case OPT_FDETAILS: order.details = input_field_filename(optarg); break;
-        case OPT_MYVERSION: order.version = input_field_string(optarg); break;
-        case OPT_FMYVERSION: order.version = input_field_filename(optarg); break;
-
-        case OPT_OUTPUT: order.output = optarg; break;
-        case OPT_DEPENDENCY:
-            arrput(order.dependencies, optarg);
+        case OPT_AUTHOR: order->author = optarg; break;
+        case OPT_FAUTHOR:
+            if (!load_field(optarg, &order->author)) return cli_error;
             break;
-        case OPT_OVERWRITE: order.overwrite = true; break;
-        case OPT_NO_CHECK: order.check = false; break;
+        case OPT_BRIEF: order->brief = optarg; break;
+        case OPT_FBRIEF:
+            if (!load_field(optarg, &order->brief)) return cli_error;
+            break;
+        case OPT_COPYRIGHT: order->copyright = optarg; break;
+        case OPT_FCOPYRIGHT:
+            if (!load_field(optarg, &order->copyright)) return cli_error;
+            break;
+        case OPT_DETAILS: order->details = optarg; break;
+        case OPT_FDETAILS:
+            if (!load_field(optarg, &order->details)) return cli_error;
+            break;
+        case 'v': order->version = optarg; break;
+        case 'V':
+            if (!load_field(optarg, &order->version)) return cli_error;
+            break;
 
-        case '?':
-            puts(USAGE);
-            puts("see --help for details");
-            return (parse_result_t) { .tag = parse_result_error, .error = parse_error_usage };
+        case 'd': vec_push(&order->dependencies, optarg); break;
+        case 'o': order->output = optarg; break;
+        case OPT_OVERWRITE: order->overwrite = true; break;
+        case OPT_NO_CHECK: order->check = false; break;
+
         default:
-            unreachable();
+            fprintf(stderr, "%s\nsee --help for details\n", USAGE);
+            return cli_error;
         }
     }
 
-    if (optind < argc) {
-        order.library = argv[optind++];
+    if (optind + 1 >= argc) {
+        fputs(PROG ": error: expected LIBRARY and at least one SOURCE\n", stderr);
+        return cli_error;
     }
-    if (optind >= argc) {
-        fputs(PROG ": error: expected at least two positional arguments, LIBRARY and at least one source file\n", stderr);
-        return (parse_result_t) { .tag = parse_result_error, .error = parse_error_usage };
+    order->library = argv[optind];
+    if (!is_identifier(order->library)) {
+        fputs(PROG ": error: LIBRARY must be a C identifier\n", stderr);
+        return cli_error;
     }
-    do {
-        arrput(order.source_files, argv[optind++]);
-    } while (optind < argc);
+    for (int i = optind + 1; i < argc; ++i) vec_push(&order->source_files, argv[i]);
 
-    return (parse_result_t) { .tag = parse_result_order, .order = order };
+    return cli_ok;
 }
 
-void free_order(void *ptr)
-{
-    arrfree(((library_order_t*)ptr)->dependencies);
-    arrfree(((library_order_t*)ptr)->source_files);
+int main(int argc, char **argv) {
+    library_order_t order;
+    switch (parse_cli(argc, argv, &order)) {
+    case cli_ok: return library_order_deliver(&order);
+    case cli_help: puts(HELP); return EXIT_SUCCESS;
+    case cli_version: puts(VERSION); return EXIT_SUCCESS;
+    case cli_error: return EXIT_FAILURE;
+    }
+    unreachable();
 }
