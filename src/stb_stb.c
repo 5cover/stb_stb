@@ -64,6 +64,7 @@ static cli_result_t parse_cli(int argc, char **argv, library_order_t *order) {
         { .name = "myversion", .has_arg = required_argument, .val = 'v' },
         { .name = "fmyversion", .has_arg = required_argument, .val = 'V' },
         { .name = "dependency", .has_arg = required_argument, .val = 'd' },
+        { .name = "entry", .has_arg = required_argument, .val = 'e' },
         { .name = "output", .has_arg = required_argument, .val = 'o' },
         { .name = "overwrite", .has_arg = no_argument, .val = OPT_OVERWRITE },
         { .name = "no-check", .has_arg = no_argument, .val = OPT_NO_CHECK },
@@ -73,7 +74,7 @@ static cli_result_t parse_cli(int argc, char **argv, library_order_t *order) {
     *order = (library_order_t) { .check = true };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "v:V:d:o:", longopts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "v:V:d:e:o:", longopts, NULL)) != -1) {
         switch (opt) {
         case OPT_HELP: return cli_help;
         case OPT_VERSION: return cli_version;
@@ -100,6 +101,7 @@ static cli_result_t parse_cli(int argc, char **argv, library_order_t *order) {
             break;
 
         case 'd': vec_push(&order->dependencies, optarg); break;
+        case 'e': vec_push(&order->entries, optarg); break;
         case 'o': order->output = optarg; break;
         case OPT_OVERWRITE: order->overwrite = true; break;
         case OPT_NO_CHECK: order->check = false; break;

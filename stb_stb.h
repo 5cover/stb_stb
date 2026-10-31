@@ -82,6 +82,7 @@ typedef struct {
     char const *library;
     char const *output;
     str_vec_t dependencies; ///< user-included headers declared external with --dependency
+    str_vec_t entries;      ///< public headers given with --entry; without any, every header is public
     str_vec_t source_files;
     bool overwrite, check;
 } library_order_t;
@@ -148,6 +149,10 @@ Other options:\n\
   -d, --dependency=FILE\n\
                           Declare a user-included header as external (can be repeated).\n\
                           The include is kept in the output instead of being embedded.\n\
+  -e, --entry=FILE        Public header (a .h input, can be repeated). Headers reachable\n\
+                          from an entry through quoted includes are declared in the output.\n\
+                          Other headers are only visible to the implementation.\n\
+                          Without --entry, every header is declared in the output.\n\
   -o, --output=FILE       Output location.\n\
                           Use '-' to write to stdout (the output is not checked).\n\
                           If FILE is a directory, writes 'stb_<library>.h' inside it.\n\
@@ -352,6 +357,7 @@ typedef struct {
     src_type_t type;
     c_directive_vec_t directives;
     bool visited;
+    bool is_public; ///< header reachable from an entry (or any header when there are no entries)
 } source_t;
 
 VEC_DEFINE(source_vec_t, source_t);
@@ -460,6 +466,46 @@ static void visit(source_vec_t *files, size_t i, size_vec_t *order) {
     vec_push(order, i);
 }
 
+/// Marks the headers reachable from the entries through quoted includes as public.
+/// Without entries, every header is public.
+static bool mark_public(library_order_t const *order, source_vec_t *files) {
+    if (!order->entries.len) {
+        for (size_t i = 0; i < files->len; ++i) files->data[i].is_public = files->data[i].type == src_type_header;
+        return true;
+    }
+
+    size_vec_t pending = { 0 };
+    for (size_t e = 0; e < order->entries.len; ++e) {
+        char const *name = order->entries.data[e];
+        char *path = canonical_path(name);
+        ptrdiff_t const index = path ? source_index(files, path) : -1;
+        free(path);
+        if (index < 0) {
+            fprintf(stderr, "error: --entry %s is not an input file\n", name);
+            return false;
+        }
+        if (files->data[index].type != src_type_header) {
+            fprintf(stderr, "error: --entry %s is not a header\n", name);
+            return false;
+        }
+        vec_push(&pending, (size_t)index);
+    }
+
+    while (pending.len) {
+        source_t *s = &files->data[pending.data[--pending.len]];
+        if (s->is_public) continue;
+        s->is_public = true;
+
+        for (size_t k = 0; k < s->directives.len; ++k) {
+            c_directive_t const *d = &s->directives.data[k];
+            if (d->tag != c_directive_include || !d->is_usr) continue;
+            ptrdiff_t const dep = resolve_include(files, s, d->name);
+            if (dep >= 0 && files->data[dep].type == src_type_header) vec_push(&pending, (size_t)dep);
+        }
+    }
+    return true;
+}
+
 static bool is_declared(library_order_t const *order, c_directive_t const *d) {
     for (size_t i = 0; i < order->dependencies.len; ++i) {
         if (!strcmp(order->dependencies.data[i], d->name)) return true;
@@ -544,10 +590,20 @@ static void put_body(FILE *out, source_vec_t const *files, source_t const *s) {
     putc('\n', out);
 }
 
-static void put_group(FILE *out, source_vec_t const *files, size_vec_t const *seq, src_type_t type) {
+/// Public headers are declared for every user of the library.
+static bool in_declarations(source_t const *s) {
+    return s->type == src_type_header && s->is_public;
+}
+
+/// Sources, and headers that are not public, are visible only to the implementation.
+static bool in_implementation(source_t const *s) {
+    return s->type == src_type_source || (s->type == src_type_header && !s->is_public);
+}
+
+static void put_group(FILE *out, source_vec_t const *files, size_vec_t const *seq, bool (*member)(source_t const *)) {
     for (size_t j = 0; j < seq->len; ++j) {
         source_t const *s = &files->data[seq->data[j]];
-        if (s->type == type) put_body(out, files, s);
+        if (member(s)) put_body(out, files, s);
     }
 }
 
@@ -582,13 +638,13 @@ static void put_library(FILE *out, library_order_t const *order, char const *upp
     fputs("/// @brief Defines modifier keywords for the definitions. Example value: static inline\n", out);
     fprintf(out, "#define STB_%s_DEFINITION\n#endif\n\n", upper);
 
-    put_group(out, files, seq, src_type_header);
+    put_group(out, files, seq, in_declarations);
 
     fputs("#ifdef __cplusplus\n}\n#endif\n\n", out);
     fprintf(out, "#endif // STB_%s_H_INCLUDED\n\n", upper);
 
     fprintf(out, "#ifdef STB_%s_IMPLEMENTATION\n\n", upper);
-    put_group(out, files, seq, src_type_source);
+    put_group(out, files, seq, in_implementation);
     fprintf(out, "#endif // STB_%s_IMPLEMENTATION\n", upper);
 }
 
@@ -611,6 +667,7 @@ int library_order_deliver(library_order_t const *order) {
 
     size_vec_t seq = { 0 };
     for (size_t i = 0; i < files.len; ++i) visit(&files, i, &seq);
+    if (!mark_public(order, &files)) return EXIT_FAILURE;
 
     c_directive_vec_t deps = { 0 };
     if (!gather_dependencies(order, &files, &seq, &deps)) return EXIT_FAILURE;
@@ -715,6 +772,7 @@ static cli_result_t parse_cli(int argc, char **argv, library_order_t *order) {
         { .name = "myversion", .has_arg = required_argument, .val = 'v' },
         { .name = "fmyversion", .has_arg = required_argument, .val = 'V' },
         { .name = "dependency", .has_arg = required_argument, .val = 'd' },
+        { .name = "entry", .has_arg = required_argument, .val = 'e' },
         { .name = "output", .has_arg = required_argument, .val = 'o' },
         { .name = "overwrite", .has_arg = no_argument, .val = OPT_OVERWRITE },
         { .name = "no-check", .has_arg = no_argument, .val = OPT_NO_CHECK },
@@ -724,7 +782,7 @@ static cli_result_t parse_cli(int argc, char **argv, library_order_t *order) {
     *order = (library_order_t) { .check = true };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "v:V:d:o:", longopts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "v:V:d:e:o:", longopts, NULL)) != -1) {
         switch (opt) {
         case OPT_HELP: return cli_help;
         case OPT_VERSION: return cli_version;
@@ -751,6 +809,7 @@ static cli_result_t parse_cli(int argc, char **argv, library_order_t *order) {
             break;
 
         case 'd': vec_push(&order->dependencies, optarg); break;
+        case 'e': vec_push(&order->entries, optarg); break;
         case 'o': order->output = optarg; break;
         case OPT_OVERWRITE: order->overwrite = true; break;
         case OPT_NO_CHECK: order->check = false; break;

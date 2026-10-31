@@ -197,6 +197,56 @@ EOF
 run computed-include 1 "$tool" computed "$d/computed/a.h" -o "$work/computed.h"
 has "$work/computed-include.err" "computed includes are not supported" "computed include is an error"
 
+# ---------------------------------------------------------------- entry headers
+
+write "$d/entry/api.h" <<'EOF'
+#include "mid.h"
+int api_value(void);
+EOF
+write "$d/entry/mid.h" <<'EOF'
+#include "deep.h"
+int mid_value(void);
+EOF
+write "$d/entry/deep.h" <<'EOF'
+int deep_value(void);
+EOF
+write "$d/entry/internal.h" <<'EOF'
+int internal_helper(void);
+EOF
+write "$d/entry/api.c" <<'EOF'
+#include "api.h"
+#include "internal.h"
+int api_value(void) { return internal_helper(); }
+int mid_value(void) { return 1; }
+int deep_value(void) { return 2; }
+int internal_helper(void) { return 3; }
+EOF
+run entry-public 0 "$tool" entry "$d/entry/api.h" "$d/entry/mid.h" "$d/entry/deep.h" "$d/entry/internal.h" "$d/entry/api.c" \
+    --entry="$d/entry/api.h" -o "$work/entry.h"
+before "$work/entry.h" "int api_value(void);" "#ifdef STB_ENTRY_IMPLEMENTATION" "entry: entry header is declared"
+before "$work/entry.h" "int deep_value(void);" "#ifdef STB_ENTRY_IMPLEMENTATION" "entry: headers reachable through the entry are declared"
+before "$work/entry.h" "#ifdef STB_ENTRY_IMPLEMENTATION" "int internal_helper(void);" "entry: unreachable header is only in the implementation"
+has "$work/entry.h" "int internal_helper(void) {" "entry: the implementation still gets the internal header"
+
+write "$work/consumer.c" <<'EOF'
+#include "entry.h"
+int use_public(void) { return api_value() + mid_value() + deep_value(); }
+EOF
+write "$work/consumer-internal.c" <<'EOF'
+#include "entry.h"
+int use_internal(void) { return internal_helper(); }
+EOF
+run consumer-public 0 clang -fsyntax-only -x c "$work/consumer.c"
+run consumer-internal 1 clang -fsyntax-only -x c "$work/consumer-internal.c"
+
+run no-entry-all-declared 0 "$tool" entry "$d/entry/api.h" "$d/entry/mid.h" "$d/entry/deep.h" "$d/entry/internal.h" "$d/entry/api.c" -o "$work/entry-all.h"
+before "$work/entry-all.h" "int internal_helper(void);" "#ifdef STB_ENTRY_IMPLEMENTATION" "entry: without --entry every header is declared"
+
+run entry-not-input 1 "$tool" entry "$d/entry/api.c" --entry="$d/entry/deep.h" -o "$work/entry-missing.h"
+has "$work/entry-not-input.err" "is not an input file" "entry must be one of the inputs"
+run entry-not-header 1 "$tool" entry "$d/entry/api.c" --entry="$d/entry/api.c" -o "$work/entry-source.h"
+has "$work/entry-not-header.err" "is not a header" "entry must be a header"
+
 # ---------------------------------------------------------------- source text handling
 
 write "$d/text/crlf.c" <<'EOF'

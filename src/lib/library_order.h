@@ -11,6 +11,7 @@ typedef struct {
     char const *library;
     char const *output;
     str_vec_t dependencies; ///< user-included headers declared external with --dependency
+    str_vec_t entries;      ///< public headers given with --entry; without any, every header is public
     str_vec_t source_files;
     bool overwrite, check;
 } library_order_t;

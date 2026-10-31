@@ -38,6 +38,10 @@ Other options:\n\
   -d, --dependency=FILE\n\
                           Declare a user-included header as external (can be repeated).\n\
                           The include is kept in the output instead of being embedded.\n\
+  -e, --entry=FILE        Public header (a .h input, can be repeated). Headers reachable\n\
+                          from an entry through quoted includes are declared in the output.\n\
+                          Other headers are only visible to the implementation.\n\
+                          Without --entry, every header is declared in the output.\n\
   -o, --output=FILE       Output location.\n\
                           Use '-' to write to stdout (the output is not checked).\n\
                           If FILE is a directory, writes 'stb_<library>.h' inside it.\n\
