@@ -1,4 +1,7 @@
-# stb_stb
+# Design notes (historical)
+
+> These are the notes written before the tool was implemented. Some ideas were dropped or changed, and the sections on options, entry points and the template describe the planned design. For what the tool does today, see [README.md](../README.md).
+
 
 Packages a project as an STB-style header only libary.
 
